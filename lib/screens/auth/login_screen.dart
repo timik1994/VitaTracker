@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import '../../services/auth_service.dart';
-import '../../components/gradient_button.dart';
-import 'verification_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -31,7 +29,6 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
-    _phoneController.addListener(_formatPhoneNumber);
 
     _animationController = AnimationController(
       vsync: this,
@@ -82,54 +79,9 @@ class _LoginScreenState extends State<LoginScreen>
   void dispose() {
     _animationController.dispose();
     _buttonAnimationController.dispose();
-    _phoneController.removeListener(_formatPhoneNumber);
-    _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
-  }
-
-  void _formatPhoneNumber() {
-    final text = _phoneController.text;
-    if (text.isEmpty) {
-      _phoneController.text = '+7';
-      _phoneController.selection = TextSelection.fromPosition(
-        TextPosition(offset: _phoneController.text.length),
-      );
-      setState(() {});
-      return;
-    }
-
-    if (!text.startsWith('+7')) {
-      _phoneController.text = '+7${text.replaceAll(RegExp(r'[^\d]'), '')}';
-      _phoneController.selection = TextSelection.fromPosition(
-        TextPosition(offset: _phoneController.text.length),
-      );
-      setState(() {});
-      return;
-    }
-
-    final digits = text.replaceAll(RegExp(r'[^\d]'), '');
-    if (digits.length > 1) {
-      final formatted = '+7${digits.substring(1)}';
-      if (formatted != text) {
-        _phoneController.text = formatted;
-        _phoneController.selection = TextSelection.fromPosition(
-          TextPosition(offset: _phoneController.text.length),
-        );
-        setState(() {});
-      }
-    }
-
-    // Скрываем клавиатуру если номер введен полностью
-    if (digits.length == 11) {
-      FocusScope.of(context).unfocus();
-    }
-  }
-
-  bool _isValidPhoneNumber(String phone) {
-    final digits = phone.replaceAll(RegExp(r'[^\d]'), '');
-    return digits.length == 11;
   }
 
   Future<void> _signInWithGoogle() async {
@@ -140,6 +92,11 @@ class _LoginScreenState extends State<LoginScreen>
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
       await authService.signInWithGoogle();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('isGuest', false);
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/');
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -151,81 +108,6 @@ class _LoginScreenState extends State<LoginScreen>
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _verifyPhone() async {
-    final phone = _phoneController.text;
-    if (!_isValidPhoneNumber(phone)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Введите корректный номер телефона (10 цифр после +7)'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-    _buttonAnimationController.repeat();
-
-    try {
-      await FirebaseAuth.instance.verifyPhoneNumber(
-        phoneNumber: phone,
-        verificationCompleted: (PhoneAuthCredential credential) async {
-          await FirebaseAuth.instance.signInWithCredential(credential);
-        },
-        verificationFailed: (FirebaseAuthException e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Ошибка верификации: ${e.message}'),
-                backgroundColor: Colors.red,
-              ),
-            );
-            _buttonAnimationController.stop();
-            setState(() {
-              _isLoading = false;
-            });
-          }
-        },
-        codeSent: (String verificationId, int? resendToken) {
-          if (mounted) {
-            _buttonAnimationController.stop();
-            Navigator.pushReplacementNamed(
-              context,
-              '/verification',
-              arguments: {
-                'phoneNumber': phone,
-                'verificationId': verificationId,
-              },
-            );
-          }
-        },
-        codeAutoRetrievalTimeout: (String verificationId) {
-          if (mounted) {
-            _buttonAnimationController.stop();
-            setState(() {
-              _isLoading = false;
-            });
-          }
-        },
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        _buttonAnimationController.stop();
         setState(() {
           _isLoading = false;
         });
@@ -254,6 +136,8 @@ class _LoginScreenState extends State<LoginScreen>
         await FirebaseAuth.instance.signOut();
         return;
       }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('isGuest', false);
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/');
       }
@@ -340,194 +224,211 @@ class _LoginScreenState extends State<LoginScreen>
 
             // Основной контент
             SafeArea(
-              child: Column(
-                children: [
-                  // Верхняя часть с логотипом и заголовком
-                  Expanded(
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.1),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.health_and_safety,
-                              size: size.width * 0.2,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Text(
-                            'VitaTracker',
-                            style: theme.textTheme.headlineLarge?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Отслеживайте свои витамины',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: Colors.white.withOpacity(0.8),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // Карточка с вводом данных внизу
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 40),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 20),
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 20,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: Form(
-                        key: _formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    // Верхняя часть с логотипом и заголовком
+                    Padding(
+                      padding: const EdgeInsets.only(top: 60, bottom: 24),
+                      child: Center(
                         child: Column(
-                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            TextFormField(
-                              controller: _emailController,
-                              keyboardType: TextInputType.emailAddress,
-                              decoration:
-                                  const InputDecoration(labelText: 'Email'),
-                              validator: (value) {
-                                if (value == null || value.isEmpty)
-                                  return 'Введите email';
-                                if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+')
-                                    .hasMatch(value))
-                                  return 'Некорректный email';
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: _passwordController,
-                              obscureText: true,
-                              decoration:
-                                  const InputDecoration(labelText: 'Пароль'),
-                              validator: (value) {
-                                if (value == null || value.isEmpty)
-                                  return 'Введите пароль';
-                                if (value.length < 6)
-                                  return 'Минимум 6 символов';
-                                return null;
-                              },
-                            ),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: TextButton(
-                                onPressed: _onForgotPassword,
-                                child: const Text('Забыли пароль?'),
+                            Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.health_and_safety,
+                                size: size.width * 0.2,
+                                color: Colors.white,
                               ),
                             ),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.white,
-                                  backgroundColor: theme.colorScheme.primary,
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12)),
-                                ),
-                                onPressed: _isLoading ? null : _login,
-                                child: _isLoading
-                                    ? const CircularProgressIndicator()
-                                    : const Text('Войти'),
+                            const SizedBox(height: 24),
+                            Text(
+                              'VitaTracker',
+                              style: theme.textTheme.headlineLarge?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
-                            const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                Expanded(
-                                    child: Divider(
-                                        color: theme.dividerColor
-                                            .withOpacity(0.5))),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16),
-                                  child: Text('или',
-                                      style: theme.textTheme.bodyMedium
-                                          ?.copyWith(
-                                              color: theme.colorScheme.onSurface
-                                                  .withOpacity(0.5))),
-                                ),
-                                Expanded(
-                                    child: Divider(
-                                        color: theme.dividerColor
-                                            .withOpacity(0.5))),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: theme.colorScheme.primary,
-                                  backgroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  side: BorderSide(color: theme.colorScheme.primary),
-                                ),
-                                onPressed: _isLoading ? null : () {
-                                  Navigator.of(context).pushReplacementNamed('/');
-                                },
-                                child: const Text('Пропустить'),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Отслеживайте свои витамины',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: Colors.white.withOpacity(0.8),
                               ),
-                            ),
-                            const SizedBox(height: 16),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed:
-                                    _isLoading ? null : _signInWithGoogle,
-                                style: OutlinedButton.styleFrom(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12)),
-                                ),
-                                icon: Image.asset('assets/google_logo.png',
-                                    height: 24),
-                                label: const Text('Войти через Google'),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Text('Нет аккаунта?'),
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.pushNamed(context, '/register'),
-                                  child: const Text('Регистрация'),
-                                ),
-                              ],
                             ),
                           ],
                         ),
                       ),
                     ),
-                  ),
-                ],
+
+                    // Карточка с вводом данных внизу
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 40),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 20),
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 20,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              TextFormField(
+                                controller: _emailController,
+                                keyboardType: TextInputType.emailAddress,
+                                decoration:
+                                    const InputDecoration(labelText: 'Email'),
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Введите email';
+                                  }
+                                  if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+')
+                                      .hasMatch(value)) {
+                                    return 'Некорректный email';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              TextFormField(
+                                controller: _passwordController,
+                                obscureText: true,
+                                decoration:
+                                    const InputDecoration(labelText: 'Пароль'),
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Введите пароль';
+                                  }
+                                  if (value.length < 6) {
+                                    return 'Минимум 6 символов';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: _onForgotPassword,
+                                  child: const Text('Забыли пароль?'),
+                                ),
+                              ),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    backgroundColor: theme.colorScheme.primary,
+                                    padding:
+                                        const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                  onPressed: _isLoading ? null : _login,
+                                  child: _isLoading
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            color: Colors.white,
+                                            strokeWidth: 2.5,
+                                          ),
+                                        )
+                                      : const Text('Войти'),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                children: [
+                                  Expanded(
+                                      child: Divider(
+                                          color: theme.dividerColor
+                                              .withOpacity(0.5))),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16),
+                                    child: Text('или',
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                                color: theme.colorScheme.onSurface
+                                                    .withOpacity(0.5))),
+                                  ),
+                                  Expanded(
+                                      child: Divider(
+                                          color: theme.dividerColor
+                                              .withOpacity(0.5))),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed:
+                                      _isLoading ? null : _signInWithGoogle,
+                                  style: OutlinedButton.styleFrom(
+                                    padding:
+                                        const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                  icon: Image.asset('assets/google_logo.png',
+                                      height: 24),
+                                  label: const Text('Войти через Google'),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Text('Нет аккаунта?'),
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pushNamed(context, '/register'),
+                                    child: const Text('Регистрация'),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              top: 30,
+              right: 5,
+              child: TextButton(
+                onPressed: _isLoading
+                    ? null
+                    : () async {
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool('isGuest', true);
+                        if (mounted) {
+                          Navigator.of(context).pushReplacementNamed('/main');
+                        }
+                      },
+                child: const Text('Пропустить',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500)),
               ),
             ),
           ],

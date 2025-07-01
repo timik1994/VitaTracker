@@ -69,6 +69,13 @@ class SettingsScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 16),
+                    if (authService.currentUser == null) ...[
+                      const SizedBox(height: 16),
+                      GradientButton(
+                        onPressed: () => Navigator.of(context).pushReplacementNamed('/login'),
+                        child: const Text('Войти', style: TextStyle(color: Colors.white)),
+                      ),
+                    ],
                     if (authService.currentUser != null) ...[
                       CircleAvatar(
                         radius: 40,
@@ -122,6 +129,7 @@ class SettingsScreen extends StatelessWidget {
                       const SizedBox(height: 24),
                       GradientButton(
                         onPressed: () async {
+                         // await Provider.of<DatabaseService>(context, listen: false).syncFromCloud();
                           try {
                             await Provider.of<DatabaseService>(context, listen: false).syncFromCloud();
                             if (context.mounted) {
@@ -137,7 +145,7 @@ class SettingsScreen extends StatelessWidget {
                             }
                           }
                         },
-                        child: const Text('Синхронизировать с облаком', style: TextStyle(color: Colors.white)),
+                        child: const Text('Синхронизация', style: TextStyle(color: Colors.white)),
                       ),
                     ],
                   ],

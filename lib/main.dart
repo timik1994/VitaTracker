@@ -7,15 +7,12 @@ import 'screens/statistics_screen.dart';
 import 'services/database_service.dart';
 import 'services/notification_service.dart';
 import '../theme/theme_provider.dart';
-import 'dart:ui';
-import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'services/auth_service.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/welcome_screen.dart';
-import 'screens/auth/verification_screen.dart';
-import 'screens/auth/login_email_screen.dart';
 import 'screens/auth/register_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,11 +44,34 @@ Future<void> main() async {
   );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
   @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  bool? _isGuest;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkGuest();
+  }
+
+  Future<void> _checkGuest() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isGuest = prefs.getBool('isGuest') ?? false;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isGuest == null) {
+      return const MaterialApp(home: Scaffold(body: Center(child: CircularProgressIndicator())));
+    }
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'VitaTracker',
@@ -70,25 +90,19 @@ class MyApp extends StatelessWidget {
       supportedLocales: const [
         Locale('ru', 'RU'),
       ],
-      home: Consumer<AuthService>(
-        builder: (context, authService, _) {
-          return authService.currentUser == null
-              ? const WelcomeScreen()
-              : const MainScreen();
-        },
-      ),
+      home: _isGuest == true
+          ? const MainScreen()
+          : Consumer<AuthService>(
+              builder: (context, authService, _) {
+                return authService.currentUser == null
+                    ? const WelcomeScreen()
+                    : const MainScreen();
+              },
+            ),
       routes: {
         '/welcome': (context) => const WelcomeScreen(),
         '/login': (context) => const LoginScreen(),
-        '/login_email': (context) => const LoginEmailScreen(),
         '/register': (context) => const RegisterScreen(),
-        '/verification': (context) {
-          final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
-          return VerificationScreen(
-            phoneNumber: args['phoneNumber'] as String,
-            verificationId: args['verificationId'] as String,
-          );
-        },
         '/main': (context) => const MainScreen(),
       },
     );
