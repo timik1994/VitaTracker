@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "376109761104",
+    "project_id": "vitatracker-43b6e",
+    "storage_bucket": "vitatracker-43b6e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:376109761104:android:8d9bdf13458a230ce44755",
+        "android_client_info": {
+          "package_name": "com.example.vita_tracker"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "376109761104-rvi5estfqp07ilitkb0ki5638m38catn.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.vita_tracker",
+            "certificate_hash": "7575ff86ab7e5a7ef41b1f8c7d447f77aaffa458"
+          }
+        },
+        {
+          "client_id": "376109761104-l7f1147tqv27me3jrtfgggcs2n02r1s2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBMIvGf-fwzvxHezyfdH6TarO-fnicxDAs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "376109761104-l7f1147tqv27me3jrtfgggcs2n02r1s2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
