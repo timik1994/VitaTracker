@@ -66,11 +66,11 @@ class Vitamin {
 
   factory Vitamin.fromMap(Map<String, dynamic> map) {
     return Vitamin(
-      id: map['id'] as int,
+      id: map['id'] == null ? null : (map['id'] is int ? map['id'] as int : int.tryParse(map['id'].toString())),
       name: map['name'] as String,
       abbreviation: map['abbreviation'] as String,
-      color: map['color'] as int,
-      dosage: map['dosage'] as double,
+      color: map['color'] is int ? map['color'] as int : int.tryParse(map['color'].toString()) ?? 0,
+      dosage: map['dosage'] is double ? map['dosage'] as double : (map['dosage'] is int ? (map['dosage'] as int).toDouble() : double.tryParse(map['dosage'].toString()) ?? 0),
       unit: map['unit'] as String,
       period: map['period'] as String,
       mealRelation: map['meal_relation'] as String,
@@ -84,6 +84,48 @@ class Vitamin {
       dailyNorm: map['daily_norm'] as String? ?? '',
       bestTimeToTake: map['best_time_to_take'] as String?,
       form: map['form'],
+    );
+  }
+
+  Vitamin copyWith({
+    int? id,
+    String? name,
+    String? abbreviation,
+    int? color,
+    double? dosage,
+    String? unit,
+    String? period,
+    String? mealRelation,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<String>? compatibleWith,
+    List<String>? incompatibleWith,
+    String? description,
+    String? benefits,
+    String? organs,
+    String? dailyNorm,
+    String? bestTimeToTake,
+    String? form,
+  }) {
+    return Vitamin(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      abbreviation: abbreviation ?? this.abbreviation,
+      color: color ?? this.color,
+      dosage: dosage ?? this.dosage,
+      unit: unit ?? this.unit,
+      period: period ?? this.period,
+      mealRelation: mealRelation ?? this.mealRelation,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      compatibleWith: compatibleWith ?? this.compatibleWith,
+      incompatibleWith: incompatibleWith ?? this.incompatibleWith,
+      description: description ?? this.description,
+      benefits: benefits ?? this.benefits,
+      organs: organs ?? this.organs,
+      dailyNorm: dailyNorm ?? this.dailyNorm,
+      bestTimeToTake: bestTimeToTake ?? this.bestTimeToTake,
+      form: form ?? this.form,
     );
   }
 } 

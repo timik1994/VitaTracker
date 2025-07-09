@@ -115,229 +115,18 @@ class NotificationService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> scheduleVitaminNotificationWithInterval({
+  Future<void> scheduleVitaminNotificationExactTime({
     required Vitamin vitamin,
     required int intakeId,
-    required DateTime start,
-    required DateTime end,
-    Duration interval = const Duration(minutes: 10),
+    required DateTime scheduledTime,
   }) async {
-    // Отменяем предыдущие уведомления для этого приёма
     await cancelNotification(intakeId);
-
-    DateTime nextTime = start;
-    int notificationId = intakeId;
-
-    // Получаем настройки временных промежутков
-    final prefs = await SharedPreferences.getInstance();
-    final morningStart = TimeOfDay(
-      hour: prefs.getInt('morning_start_hour') ?? 8,
-      minute: prefs.getInt('morning_start_minute') ?? 0,
-    );
-    final morningEnd = TimeOfDay(
-      hour: prefs.getInt('morning_end_hour') ?? 10,
-      minute: prefs.getInt('morning_end_minute') ?? 0,
-    );
-    final afternoonStart = TimeOfDay(
-      hour: prefs.getInt('afternoon_start_hour') ?? 13,
-      minute: prefs.getInt('afternoon_start_minute') ?? 0,
-    );
-    final afternoonEnd = TimeOfDay(
-      hour: prefs.getInt('afternoon_end_hour') ?? 15,
-      minute: prefs.getInt('afternoon_end_minute') ?? 0,
-    );
-    final eveningStart = TimeOfDay(
-      hour: prefs.getInt('evening_start_hour') ?? 19,
-      minute: prefs.getInt('evening_start_minute') ?? 0,
-    );
-    final eveningEnd = TimeOfDay(
-      hour: prefs.getInt('evening_end_hour') ?? 21,
-      minute: prefs.getInt('evening_end_minute') ?? 0,
-    );
-
-    print('Планирование уведомлений для витамина ${vitamin.name}');
-    print('Временные промежутки:');
-    print('Утро: ${morningStart.hour}:${morningStart.minute} - ${morningEnd.hour}:${morningEnd.minute}');
-    print('День: ${afternoonStart.hour}:${afternoonStart.minute} - ${afternoonEnd.hour}:${afternoonEnd.minute}');
-    print('Вечер: ${eveningStart.hour}:${eveningStart.minute} - ${eveningEnd.hour}:${eveningEnd.minute}');
-
-    while (nextTime.isBefore(end)) {
-      final timeOfDay = TimeOfDay(hour: nextTime.hour, minute: nextTime.minute);
-      
-      // Проверяем, попадает ли время в один из разрешенных промежутков
-      bool isInAllowedPeriod = _isTimeInRange(timeOfDay, morningStart, morningEnd) ||
-          _isTimeInRange(timeOfDay, afternoonStart, afternoonEnd) ||
-          _isTimeInRange(timeOfDay, eveningStart, eveningEnd);
-
-      if (isInAllowedPeriod) {
-        final tzScheduled = tz.TZDateTime.from(nextTime, tz.local);
-        print('Планирование уведомления на ${tzScheduled.toString()}');
-        
-        try {
-          await _notifications.zonedSchedule(
-            notificationId,
-            'Время принять ${vitamin.name}! 💊',
-            'Вы приняли витамин?',
-            tzScheduled,
-            NotificationDetails(
-              android: AndroidNotificationDetails(
-                'vitamin_reminders',
-                'Напоминания о витаминах',
-                importance: Importance.high,
-                priority: Priority.high,
-                actions: [
-                  AndroidNotificationAction(
-                    'accepted',
-                    'Принял',
-                    showsUserInterface: true,
-                  ),
-                  AndroidNotificationAction(
-                    'missed',
-                    'Не принял',
-                    showsUserInterface: true,
-                  ),
-                ],
-                sound: _soundEnabled ? const RawResourceAndroidNotificationSound('notification') : null,
-                enableVibration: _vibrationEnabled,
-              ),
-              iOS: DarwinNotificationDetails(
-                sound: _soundEnabled ? 'notification.wav' : null,
-                presentSound: _soundEnabled,
-                presentBadge: true,
-                presentAlert: true,
-              ),
-            ),
-            androidAllowWhileIdle: true,
-            uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-            matchDateTimeComponents: null,
-            payload: 'confirm_${intakeId}_accepted',
-          );
-          print('Уведомление успешно запланировано');
-        } catch (e) {
-          print('Ошибка при планировании уведомления: $e');
-          // Если не удалось установить пользовательский звук, используем системный
-          try {
-            await _notifications.zonedSchedule(
-              notificationId,
-              'Время принять ${vitamin.name}! 💊',
-              'Вы приняли витамин?',
-              tzScheduled,
-              NotificationDetails(
-                android: AndroidNotificationDetails(
-                  'vitamin_reminders',
-                  'Напоминания о витаминах',
-                  importance: Importance.high,
-                  priority: Priority.high,
-                  actions: [
-                    AndroidNotificationAction(
-                      'accepted',
-                      'Принял',
-                      showsUserInterface: true,
-                    ),
-                    AndroidNotificationAction(
-                      'missed',
-                      'Не принял',
-                      showsUserInterface: true,
-                    ),
-                  ],
-                  enableVibration: _vibrationEnabled,
-                ),
-                iOS: DarwinNotificationDetails(
-                  presentSound: _soundEnabled,
-                  presentBadge: true,
-                  presentAlert: true,
-                ),
-              ),
-              androidAllowWhileIdle: true,
-              uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-              matchDateTimeComponents: null,
-              payload: 'confirm_${intakeId}_accepted',
-            );
-            print('Уведомление успешно запланировано с системным звуком');
-          } catch (e) {
-            print('Ошибка при планировании уведомления с системным звуком: $e');
-          }
-        }
-        notificationId++;
-      }
-      nextTime = nextTime.add(interval);
-    }
-  }
-
-  bool _isTimeInRange(TimeOfDay time, TimeOfDay start, TimeOfDay end) {
-    final timeInMinutes = time.hour * 60 + time.minute;
-    final startInMinutes = start.hour * 60 + start.minute;
-    final endInMinutes = end.hour * 60 + end.minute;
-
-    if (endInMinutes < startInMinutes) {
-      // Если промежуток переходит через полночь
-      return timeInMinutes >= startInMinutes || timeInMinutes <= endInMinutes;
-    }
-    return timeInMinutes >= startInMinutes && timeInMinutes <= endInMinutes;
-  }
-
-  Future<void> rescheduleAllNotifications() async {
-    await cancelAllNotifications();
-    final dbService = DatabaseService();
-    final now = DateTime.now();
-    final intakes = await dbService.getVitaminIntakes();
-
-    // Группируем приёмы по периоду суток
-    Map<String, List<Vitamin>> periodVitamins = {
-      'Утро': [],
-      'День': [],
-      'Вечер': [],
-      'Перед сном': [],
-    };
-    final prefs = await SharedPreferences.getInstance();
-    final periods = [
-      {
-        'name': 'Утро',
-        'start': TimeOfDay(hour: prefs.getInt('morning_start_hour') ?? 8, minute: prefs.getInt('morning_start_minute') ?? 0),
-        'end': TimeOfDay(hour: prefs.getInt('morning_end_hour') ?? 10, minute: prefs.getInt('morning_end_minute') ?? 0),
-      },
-      {
-        'name': 'День',
-        'start': TimeOfDay(hour: prefs.getInt('afternoon_start_hour') ?? 13, minute: prefs.getInt('afternoon_start_minute') ?? 0),
-        'end': TimeOfDay(hour: prefs.getInt('afternoon_end_hour') ?? 15, minute: prefs.getInt('afternoon_end_minute') ?? 0),
-      },
-      {
-        'name': 'Вечер',
-        'start': TimeOfDay(hour: prefs.getInt('evening_start_hour') ?? 19, minute: prefs.getInt('evening_start_minute') ?? 0),
-        'end': TimeOfDay(hour: prefs.getInt('evening_end_hour') ?? 21, minute: prefs.getInt('evening_end_minute') ?? 0),
-      },
-      {
-        'name': 'Перед сном',
-        'start': TimeOfDay(hour: prefs.getInt('bedtime_start_hour') ?? 22, minute: prefs.getInt('bedtime_start_minute') ?? 0),
-        'end': TimeOfDay(hour: prefs.getInt('bedtime_end_hour') ?? 23, minute: prefs.getInt('bedtime_end_minute') ?? 59),
-      },
-    ];
-
-    for (final intake in intakes) {
-      if (intake.isTaken || intake.scheduledTime.isBefore(now)) continue;
-      final vitamin = await dbService.getVitamins().then((vits) => vits.firstWhere((v) => v.id == intake.vitaminId));
-      final time = TimeOfDay(hour: intake.scheduledTime.hour, minute: intake.scheduledTime.minute);
-      for (final period in periods) {
-        if (_isTimeInRange(time, period['start'] as TimeOfDay, period['end'] as TimeOfDay)) {
-          periodVitamins[period['name'] as String]?.add(vitamin);
-          break;
-        }
-      }
-    }
-
-    int notificationId = 10000; // уникальный id для групповых уведомлений
-    for (final period in periods) {
-      final name = period['name'] as String;
-      final vitamins = periodVitamins[name]!;
-      if (vitamins.isEmpty) continue;
-      final nowDate = DateTime.now();
-      final scheduledTime = DateTime(nowDate.year, nowDate.month, nowDate.day, (period['start'] as TimeOfDay).hour, (period['start'] as TimeOfDay).minute);
-      final tzScheduled = tz.TZDateTime.from(scheduledTime.isAfter(nowDate) ? scheduledTime : scheduledTime.add(const Duration(days: 1)), tz.local);
-      final vitaminNames = vitamins.map((v) => v.name).join(', ');
+    final tzScheduled = tz.TZDateTime.from(scheduledTime, tz.local);
+    try {
       await _notifications.zonedSchedule(
-        notificationId,
-        'Время принять витамины ($name)! 💊',
-        'Не забудьте принять: $vitaminNames',
+        intakeId,
+        'Время стать лучше. Быстрее принимай витамин',
+        'Вы приняли витамин?',
         tzScheduled,
         NotificationDetails(
           android: AndroidNotificationDetails(
@@ -345,6 +134,18 @@ class NotificationService extends ChangeNotifier {
             'Напоминания о витаминах',
             importance: Importance.high,
             priority: Priority.high,
+            actions: [
+              AndroidNotificationAction(
+                'accepted',
+                'Принял',
+                showsUserInterface: true,
+              ),
+              AndroidNotificationAction(
+                'missed',
+                'Не принял',
+                showsUserInterface: true,
+              ),
+            ],
             sound: _soundEnabled ? const RawResourceAndroidNotificationSound('notification') : null,
             enableVibration: _vibrationEnabled,
           ),
@@ -357,10 +158,60 @@ class NotificationService extends ChangeNotifier {
         ),
         androidAllowWhileIdle: true,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time,
-        payload: 'group_period_${name}',
+        matchDateTimeComponents: null,
+        payload: 'confirm_${intakeId}_accepted',
       );
-      notificationId++;
+    } catch (e) {
+      // fallback без звука
+      await _notifications.zonedSchedule(
+        intakeId,
+        'Время стать лучше. Быстрее принимай витамины 💊',
+        'Вы приняли витамин?',
+        tzScheduled,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            'vitamin_reminders',
+            'Напоминания о витаминах',
+            importance: Importance.high,
+            priority: Priority.high,
+            enableVibration: _vibrationEnabled,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentSound: _soundEnabled,
+            presentBadge: true,
+            presentAlert: true,
+          ),
+        ),
+        androidAllowWhileIdle: true,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: null,
+        payload: 'confirm_${intakeId}_accepted',
+      );
+    }
+  }
+
+  Future<void> rescheduleAllNotifications() async {
+    await cancelAllNotifications();
+    final dbService = DatabaseService();
+    final prefs = await SharedPreferences.getInstance();
+    final intakes = await dbService.getVitaminIntakes();
+    final vitamins = await dbService.getVitamins();
+    for (final intake in intakes) {
+      if (intake.isTaken) continue;
+      Vitamin? vitamin;
+      try {
+        vitamin = vitamins.firstWhere((v) => v.id == intake.vitaminId);
+      } catch (_) {
+        vitamin = null;
+      }
+      if (vitamin == null) continue;
+      // Определяем режим для витамина (утро, день, вечер, перед сном, 1/2/3 раза)
+      // Здесь предполагается, что intake.scheduledTime уже содержит нужное время
+      await scheduleVitaminNotificationExactTime(
+        vitamin: vitamin,
+        intakeId: intake.id!,
+        scheduledTime: intake.scheduledTime,
+      );
     }
   }
 

@@ -1,17 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../models/vitamin.dart';
 import '../models/vitamin_presets.dart';
 import '../services/database_service.dart';
 import '../services/notification_service.dart';
-import '../widgets/gradient_button.dart';
 import '../models/vitamin_intake.dart';
-import 'package:flutter/cupertino.dart';
 import '../components/my_dropdown.dart';
-import '../components/my_segmented_button.dart';
 import '../components/my_app_bar.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AddVitaminScreen extends StatefulWidget {
   final Vitamin? vitamin;
@@ -26,7 +23,7 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
   String? _selectedVitamin;
   String _form = 'Таблетки';
   String _unit = 'таблетка';
-  String _period = 'утро';
+  String _selectedPeriod = 'утро';
   String _mealRelation = 'во время еды';
   DateTime _startDate = DateTime.now();
   DateTime _endDate = DateTime.now().add(const Duration(days: 30));
@@ -39,12 +36,15 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
   int _dosageValue = 1;
 
   final List<String> _forms = ['Таблетки', 'Капсулы', 'Порошок', 'Жидкость', 'Спрей', 'Саше'];
-  final List<String> _periods = ['утро', 'день', 'вечер', 'перед сном'];
+  final List<String> _periods = ['утро', 'день', 'вечер', 'перед сном', '1 раз в день',  '2 раза в день', '3 раза в день'];
   final Map<String, IconData> _periodIcons = {
     'утро': Icons.wb_sunny_outlined,
     'день': Icons.brightness_5_outlined,
     'вечер': Icons.nights_stay_outlined,
     'перед сном': Icons.bedtime_outlined,
+    '1 раз в день': Icons.filter_1,
+    '2 раза в день': Icons.filter_2,
+    '3 раза в день': Icons.filter_3,
   };
   final List<String> _mealRelations = ['до еды', 'во время еды', 'после еды'];
   final Map<String, IconData> _mealRelationIcons = {
@@ -52,7 +52,6 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
     'во время еды': Icons.restaurant,
     'после еды': Icons.local_restaurant,
   };
-  Set<String> _selectedPeriods = {'утро'};
 
   // Контроллеры для полей
   final TextEditingController _dosageController = TextEditingController();
@@ -60,7 +59,6 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
   final TextEditingController _incompatibleController = TextEditingController();
   final TextEditingController _customNameController = TextEditingController();
   final TextEditingController _abbreviationController = TextEditingController();
-  Color _customColor = Colors.blue;
   String _autoAbbreviation = '';
   Color _autoColor = Colors.blue;
 
@@ -68,23 +66,45 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
   void initState() {
     super.initState();
     if (widget.vitamin != null) {
-      _selectedVitamin = widget.vitamin!.name;
-      _form = widget.vitamin!.form ?? 'Таблетки';
-      _unit = widget.vitamin!.unit;
-      _period = widget.vitamin!.period;
-      _mealRelation = widget.vitamin!.mealRelation;
-      _startDate = widget.vitamin!.startDate;
-      _endDate = widget.vitamin!.endDate;
-      _description = widget.vitamin!.description;
-      _benefits = widget.vitamin!.benefits;
-      _organs = widget.vitamin!.organs;
-      _dailyNorm = widget.vitamin!.dailyNorm;
-      _bestTimeToTake = widget.vitamin!.bestTimeToTake ?? '';
-      _dosageController.text = widget.vitamin!.dosage.toString();
-      _compatibleController.text = widget.vitamin!.compatibleWith.join(', ');
-      _incompatibleController.text = widget.vitamin!.incompatibleWith.join(', ');
-      _courseDays = widget.vitamin!.endDate.difference(widget.vitamin!.startDate).inDays + 1;
-      _dosageValue = widget.vitamin!.dosage.toInt();
+      final isPreset = vitaminPresets.any((v) => v.name == widget.vitamin!.name);
+      if (isPreset) {
+        _selectedVitamin = widget.vitamin!.name;
+        _form = widget.vitamin!.form ?? 'Таблетки';
+        _unit = widget.vitamin!.unit;
+        _selectedPeriod = widget.vitamin!.period;
+        _mealRelation = widget.vitamin!.mealRelation;
+        _startDate = widget.vitamin!.startDate;
+        _endDate = widget.vitamin!.endDate;
+        _description = widget.vitamin!.description;
+        _benefits = widget.vitamin!.benefits;
+        _organs = widget.vitamin!.organs;
+        _dailyNorm = widget.vitamin!.dailyNorm;
+        _bestTimeToTake = widget.vitamin!.bestTimeToTake ?? '';
+        _dosageController.text = widget.vitamin!.dosage.toString();
+        _compatibleController.text = widget.vitamin!.compatibleWith.join(', ');
+        _incompatibleController.text = widget.vitamin!.incompatibleWith.join(', ');
+        _courseDays = widget.vitamin!.endDate.difference(widget.vitamin!.startDate).inDays + 1;
+        _dosageValue = widget.vitamin!.dosage.toInt();
+      } else {
+        _selectedVitamin = 'Другое';
+        _customNameController.text = widget.vitamin!.name;
+        _autoAbbreviation = widget.vitamin!.abbreviation;
+        _autoColor = Color(widget.vitamin!.color);
+        _form = widget.vitamin!.form ?? 'Таблетки';
+        _unit = widget.vitamin!.unit;
+        _selectedPeriod = widget.vitamin!.period;
+        _mealRelation = widget.vitamin!.mealRelation;
+        _startDate = widget.vitamin!.startDate;
+        _endDate = widget.vitamin!.endDate;
+        _description = widget.vitamin!.description;
+        _benefits = widget.vitamin!.benefits;
+        _organs = widget.vitamin!.organs;
+        _dailyNorm = widget.vitamin!.dailyNorm;
+        _bestTimeToTake = widget.vitamin!.bestTimeToTake ?? '';
+        _dosageController.text = widget.vitamin!.dosage.toString();
+        _courseDays = widget.vitamin!.endDate.difference(widget.vitamin!.startDate).inDays + 1;
+        _dosageValue = widget.vitamin!.dosage.toInt();
+      }
     }
   }
 
@@ -103,7 +123,7 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
     setState(() {
       _form = _forms.contains(preset.form) ? preset.form! : _forms.first;
       _unit = preset.unit;
-      _period = _periods.contains(preset.period) ? preset.period : _periods.first;
+      _selectedPeriod = preset.period;
       _mealRelation = _mealRelations.contains(preset.mealRelation) ? preset.mealRelation : _mealRelations.first;
       _description = preset.description;
       _benefits = preset.benefits;
@@ -116,7 +136,7 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
     });
   }
 
-  int get _selectedPeriodIndex => _periods.indexOf(_period);
+  int get _selectedPeriodIndex => _periods.indexOf(_selectedPeriod);
   int get _selectedMealIndex => _mealRelations.indexOf(_mealRelation);
 
   String _formatShortDate(DateTime date) {
@@ -152,8 +172,9 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
                       setState(() {
                         _selectedVitamin = 'Другое';
                         _customNameController.text = '';
-                        _autoAbbreviation = '';
                         _autoColor = _getRandomColor();
+                        _autoAbbreviation = _generateConsonantAbbreviation(_customNameController.text);
+                        _dosageController.text = '1';
                       });
                     } else {
                       setState(() {
@@ -166,7 +187,7 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
                 itemLabel: (name) {
                   if (name == 'Другое') {
                     return Row(
-                      children: [
+                      children: const[
                         Icon(Icons.add, color: Colors.grey),
                         SizedBox(width: 8),
                         Text('Другое', style: TextStyle(fontSize: 16)),
@@ -210,7 +231,7 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
 
               if (_selectedVitamin == 'Другое') ...[
                 const SizedBox(height: 12),
-                Text('Название', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text('Название', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _customNameController,
@@ -219,12 +240,12 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
                       _autoAbbreviation = _generateConsonantAbbreviation(value);
                     });
                   },
-                  decoration: InputDecoration(hintText: 'Введите название'),
+                  decoration: const InputDecoration(hintText: 'Введите название'),
                 ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Text('Аббревиатура: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text('Аббревиатура: ', style: TextStyle(fontWeight: FontWeight.bold)),
                     Text(_autoAbbreviation, style: TextStyle(fontWeight: FontWeight.bold, color: _autoColor)),
                     const SizedBox(width: 16),
                     GestureDetector(
@@ -232,7 +253,7 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
                         final color = await showDialog<Color>(
                           context: context,
                           builder: (context) => AlertDialog(
-                            title: Text('Выберите цвет'),
+                            title:const Text('Выберите цвет'),
                             content: SingleChildScrollView(
                               child: BlockPicker(
                                 pickerColor: _autoColor,
@@ -256,7 +277,7 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
                           color: _autoColor,
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(Icons.color_lens, color: Colors.white, size: 18),
+                        child: const Icon(Icons.color_lens, color: Colors.white, size: 18),
                       ),
                     ),
                   ],
@@ -289,7 +310,7 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surfaceVariant,
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
+                  boxShadow: const [
                     BoxShadow(
                       color: Colors.black12,
                       blurRadius: 4,
@@ -304,7 +325,7 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
                       child: TextField(
                         controller: _dosageController,
                         keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           hintText: 'Дозировка',
                           border: InputBorder.none,
                           isDense: true,
@@ -325,7 +346,7 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surfaceVariant,
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
+                  boxShadow: const [
                     BoxShadow(
                       color: Colors.black12,
                       blurRadius: 4,
@@ -386,7 +407,7 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
                         decoration: BoxDecoration(
                           color: Theme.of(context).colorScheme.surfaceVariant,
                           borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
+                          boxShadow: const [
                             BoxShadow(
                               color: Colors.black12,
                               blurRadius: 4,
@@ -432,7 +453,7 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
                         decoration: BoxDecoration(
                           color: Theme.of(context).colorScheme.surfaceVariant,
                           borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
+                          boxShadow: const [
                             BoxShadow(
                               color: Colors.black12,
                               blurRadius: 4,
@@ -462,7 +483,7 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Период приема (выбор через иконки с множественным выбором)
+              // Период приема (выбор через иконки, одиночный)
               const Text('Период приёма', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Row(
@@ -471,13 +492,7 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
                   child: GestureDetector(
                     onTap: () {
                       setState(() {
-                        if (_selectedPeriods.contains(p)) {
-                          if (_selectedPeriods.length > 1) {
-                            _selectedPeriods.remove(p);
-                          }
-                        } else {
-                          _selectedPeriods.add(p);
-                        }
+                        _selectedPeriod = p;
                       });
                     },
                     child: Column(
@@ -486,17 +501,17 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: _selectedPeriods.contains(p) 
-                              ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
-                              : Colors.transparent,
+                            color: _selectedPeriod == p
+                                ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
+                                : Colors.transparent,
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
                             _periodIcons[p],
-                            color: _selectedPeriods.contains(p) 
-                              ? Theme.of(context).colorScheme.primary 
-                              : Colors.grey,
-                            size: 28
+                            color: _selectedPeriod == p
+                                ? Theme.of(context).colorScheme.primary
+                                : Colors.grey,
+                            size: 28,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -504,12 +519,12 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
                           p,
                           style: TextStyle(
                             fontSize: 12,
-                            color: _selectedPeriods.contains(p) 
-                              ? Theme.of(context).colorScheme.primary 
-                              : Colors.grey,
-                            fontWeight: _selectedPeriods.contains(p) 
-                              ? FontWeight.bold 
-                              : FontWeight.normal,
+                            color: _selectedPeriod == p
+                                ? Theme.of(context).colorScheme.primary
+                                : Colors.grey,
+                            fontWeight: _selectedPeriod == p
+                                ? FontWeight.bold
+                                : FontWeight.normal,
                           ),
                           textAlign: TextAlign.center,
                         ),
@@ -568,15 +583,7 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Совместимость
-              const Text(
-                'Совместимость',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
+              // Совместимость только если не 'Другое'
               if (_selectedVitamin != 'Другое') ...[
                 Container(
                   decoration: BoxDecoration(
@@ -704,7 +711,7 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
       Vitamin vitamin;
       if (_selectedVitamin == 'Другое') {
         vitamin = Vitamin(
-          id: widget.vitamin?.id,
+          id: null,
           name: _customNameController.text.trim(),
           abbreviation: _autoAbbreviation,
           dosage: double.tryParse(_dosageController.text) ?? 0,
@@ -712,7 +719,7 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
           endDate: _startDate.add(Duration(days: _courseDays - 1)),
           unit: _unit,
           color: _autoColor.value,
-          period: _selectedPeriods.join(', '),
+          period: _selectedPeriod,
           mealRelation: _mealRelation,
           compatibleWith: [],
           incompatibleWith: [],
@@ -726,7 +733,7 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
       } else {
         final preset = vitaminPresets.firstWhere((v) => v.name == _selectedVitamin);
         vitamin = Vitamin(
-          id: widget.vitamin?.id,
+          id: null,
           name: _selectedVitamin!,
           abbreviation: preset.abbreviation,
           dosage: double.tryParse(_dosageController.text) ?? 0,
@@ -734,7 +741,7 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
           endDate: _startDate.add(Duration(days: _courseDays - 1)),
           unit: _unit,
           color: preset.color,
-          period: _selectedPeriods.join(', '),
+          period: _selectedPeriod,
           mealRelation: _mealRelation,
           compatibleWith: _compatibleController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
           incompatibleWith: _incompatibleController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
@@ -749,41 +756,82 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
 
       if (widget.vitamin != null) {
         // Редактирование
-        await dbService.deleteVitamin(vitamin.id!);
-        await dbService.insertVitamin(vitamin);
+        final updatedVitamin = vitamin.copyWith(id: widget.vitamin!.id);
+        await dbService.updateVitamin(updatedVitamin);
+        await dbService.saveVitaminToCloud(updatedVitamin);
       } else {
         // Добавление
         final vitaminId = await dbService.insertVitamin(vitamin);
+        final vitaminWithId = vitamin.copyWith(id: vitaminId);
+        await dbService.saveVitaminToCloud(vitaminWithId);
         // Создание приёмов и уведомлений — в фоне, чтобы не блокировать UI
         Future(() async {
           final periods = await dbService.getPeriodTimes();
-          final period = periods[_period] ?? {'start': 7 * 60, 'end': 9 * 60};
-          final startMinutes = period['start']!;
-          final endMinutes = period['end']!;
+          final prefs = await SharedPreferences.getInstance();
           final todayStart = DateTime(now.year, now.month, now.day);
           final duration = _courseDays;
-          final timesPerDay = _period == '3 раза в сутки' ? 3 : 1;
+
+          // Получаем точные времена для новых режимов
+          int onceHour = prefs.getInt('once_time_hour') ?? 8;
+          int onceMinute = prefs.getInt('once_time_minute') ?? 0;
+          int twice1Hour = prefs.getInt('twice_time1_hour') ?? 8;
+          int twice1Minute = prefs.getInt('twice_time1_minute') ?? 0;
+          int twice2Hour = prefs.getInt('twice_time2_hour') ?? 18;
+          int twice2Minute = prefs.getInt('twice_time2_minute') ?? 0;
+          int thrice1Hour = prefs.getInt('thrice_time1_hour') ?? 8;
+          int thrice1Minute = prefs.getInt('thrice_time1_minute') ?? 0;
+          int thrice2Hour = prefs.getInt('thrice_time2_hour') ?? 12;
+          int thrice2Minute = prefs.getInt('thrice_time2_minute') ?? 0;
+          int thrice3Hour = prefs.getInt('thrice_time3_hour') ?? 18;
+          int thrice3Minute = prefs.getInt('thrice_time3_minute') ?? 0;
 
           for (int i = 0; i < duration; i++) {
             final day = todayStart.add(Duration(days: i));
-            for (int t = 0; t < timesPerDay; t++) {
-              final interval = ((endMinutes - startMinutes) ~/ timesPerDay);
-              final minutes = startMinutes + interval * t;
-              final start = DateTime(day.year, day.month, day.day, minutes ~/ 60, minutes % 60);
-              final end = DateTime(day.year, day.month, day.day, (minutes + interval) ~/ 60, (minutes + interval) % 60);
-              if (start.isBefore(now)) continue;
+            List<DateTime> times = [];
+            if (_selectedPeriod == '1 раз в день') {
+              times = [DateTime(day.year, day.month, day.day, onceHour, onceMinute)];
+            } else if (_selectedPeriod == '2 раза в день') {
+              times = [
+                DateTime(day.year, day.month, day.day, twice1Hour, twice1Minute),
+                DateTime(day.year, day.month, day.day, twice2Hour, twice2Minute),
+              ];
+            } else if (_selectedPeriod == '3 раза в день') {
+              times = [
+                DateTime(day.year, day.month, day.day, thrice1Hour, thrice1Minute),
+                DateTime(day.year, day.month, day.day, thrice2Hour, thrice2Minute),
+                DateTime(day.year, day.month, day.day, thrice3Hour, thrice3Minute),
+              ];
+            } else {
+              // Старые варианты: утро, день, вечер, перед сном
+              int hour = 8;
+              int minute = 0;
+              if (_selectedPeriod == 'утро') {
+                hour = prefs.getInt('morning_time_hour') ?? 8;
+                minute = prefs.getInt('morning_time_minute') ?? 0;
+              } else if (_selectedPeriod == 'день') {
+                hour = prefs.getInt('afternoon_time_hour') ?? 12;
+                minute = prefs.getInt('afternoon_time_minute') ?? 0;
+              } else if (_selectedPeriod == 'вечер') {
+                hour = prefs.getInt('evening_time_hour') ?? 18;
+                minute = prefs.getInt('evening_time_minute') ?? 0;
+              } else if (_selectedPeriod == 'перед сном') {
+                hour = prefs.getInt('night_time_hour') ?? 22;
+                minute = prefs.getInt('night_time_minute') ?? 0;
+              }
+              times = [DateTime(day.year, day.month, day.day, hour, minute)];
+            }
+            for (final time in times) {
+              if (time.isBefore(now)) continue;
               final intakeId = await dbService.insertVitaminIntake(VitaminIntake(
                 vitaminId: vitaminId,
-                scheduledTime: start,
+                scheduledTime: time,
                 takenTime: DateTime.now(),
                 isTaken: false,
               ));
-              await notificationService.scheduleVitaminNotificationWithInterval(
-                vitamin: vitamin,
+              await notificationService.scheduleVitaminNotificationExactTime(
+                vitamin: vitaminWithId,
                 intakeId: intakeId,
-                start: start,
-                end: end,
-                interval: const Duration(minutes: 10),
+                scheduledTime: time,
               );
             }
           }
@@ -818,12 +866,12 @@ class _AddVitaminScreenState extends State<AddVitaminScreen> {
   }
 
   String _generateConsonantAbbreviation(String value) {
-    final consonants = 'бвгджзйклмнпрстфхцчшщ';
+    const consonants = 'бвгджзйклмнпрстфхцчшщbcdfghjklmnpqrstvwxyz';
     final chars = value
         .toLowerCase()
         .runes
         .map((r) => String.fromCharCode(r))
-        .where((c) => consonants.contains(c) || 'bcdfghjklmnpqrstvwxyz'.contains(c))
+        .where((c) => consonants.contains(c))
         .toList();
     if (chars.isEmpty) return '';
     if (chars.length == 1) return chars.first.toUpperCase();

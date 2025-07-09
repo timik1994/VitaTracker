@@ -4,10 +4,7 @@ import '../models/vitamin.dart';
 import '../services/database_service.dart';
 import '../services/notification_service.dart';
 import 'add_vitamin_screen.dart';
-import 'statistics_screen.dart';
 import 'settings_screen.dart';
-import 'notification_settings_screen.dart';
-import '../widgets/gradient_button.dart';
 import '../models/vitamin_intake.dart';
 import '../components/my_app_bar.dart';
 import 'package:table_calendar/table_calendar.dart';
@@ -21,7 +18,6 @@ class HomeScreen extends StatefulWidget {
 
 class HomeScreenState extends State<HomeScreen> {
   late Future<List<Vitamin>> _vitaminsFuture;
-  int _selectedIndex = 0;
 
   @override
   void initState() {
@@ -59,15 +55,20 @@ class HomeScreenState extends State<HomeScreen> {
     }
     if (todayIntake == null) {
       // Если приёма нет — создаём и сразу отмечаем как принятый
-      final intakeId = await dbService.insertVitaminIntake(VitaminIntake(
+      final intake = VitaminIntake(
         vitaminId: vitaminId,
         scheduledTime: today,
         takenTime: DateTime.now(),
         isTaken: true,
-      ));
-      await dbService.updateVitaminIntakeAsTaken(intakeId);
+      );
+      final intakeId = await dbService.insertVitaminIntake(intake);
+      await dbService.updateVitaminIntakeWithCloudSync(
+        intake.copyWith(id: intakeId),
+      );
     } else if (!todayIntake.isTaken) {
-      await dbService.updateVitaminIntakeAsTaken(todayIntake.id!);
+      await dbService.updateVitaminIntakeWithCloudSync(
+        todayIntake.copyWith(isTaken: true, takenTime: DateTime.now()),
+      );
     }
     setState(() {});
   }
@@ -78,17 +79,6 @@ class HomeScreenState extends State<HomeScreen> {
       appBar: MyAppBar(
         title: 'VitaTracker',
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications, size: 28, color: Color(0xFF409CFF)),
-            tooltip: 'Настройки уведомлений',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const NotificationSettingsScreen()),
-              );
-            },
-          ),
-          const SizedBox(width: 4),
           IconButton(
             icon: const Icon(Icons.settings, size: 28, color: Color(0xFF409CFF)),
             tooltip: 'Настройки приложения',
@@ -132,19 +122,12 @@ class HomeScreenState extends State<HomeScreen> {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              String formatTime(int minutes) {
-                final h = (minutes ~/ 60).toString().padLeft(2, '0');
-                final m = (minutes % 60).toString().padLeft(2, '0');
-                return '$h:$m';
-              }
 
               return ListView.builder(
                 padding: const EdgeInsets.all(16.0),
                 itemCount: vitamins.length,
                 itemBuilder: (context, index) {
                   final vitamin = vitamins[index];
-                  final now = DateTime.now();
-                  final today = DateTime(now.year, now.month, now.day);
                   // Получаем все приёмы для витамина
                   final dbService = Provider.of<DatabaseService>(context, listen: false);
                   // Для асинхронного получения intakes используем FutureBuilder
@@ -247,10 +230,10 @@ class HomeScreenState extends State<HomeScreen> {
                                 ),
                                 TextButton(
                                   onPressed: () => Navigator.of(context).pop(true),
-                                  child: const Text('Удалить'),
                                   style: TextButton.styleFrom(
                                     foregroundColor: Colors.red,
                                   ),
+                                  child: const Text('Удалить'),
                                 ),
                               ],
                             ),
@@ -266,8 +249,8 @@ class HomeScreenState extends State<HomeScreen> {
                               await notificationService.cancelNotification(intake.id!);
                             }
                             
-                            // Удаляем витамин из базы данных
-                            await dbService.deleteVitamin(vitamin.id!);
+                            // Удаляем витамин из базы данных и облака
+                            await dbService.deleteVitaminWithCloudSync(vitamin.id!);
                             
                             if (!mounted) return;
                             _loadVitamins();
@@ -286,6 +269,7 @@ class HomeScreenState extends State<HomeScreen> {
                           await Future.delayed(const Duration(milliseconds: 100));
                           _loadVitamins();
                           setState(() {});
+                          if(mounted){
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text('Приём витамина "${vitamin.name}" отмечен!'),
@@ -293,6 +277,7 @@ class HomeScreenState extends State<HomeScreen> {
                               duration: const Duration(seconds: 2),
                             ),
                           );
+                          }
                         },
                       );
                     },
@@ -313,8 +298,8 @@ class HomeScreenState extends State<HomeScreen> {
             refresh();
           }
         },
-        child: const Icon(Icons.add),
         backgroundColor: Theme.of(context).colorScheme.primary,
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -344,7 +329,7 @@ class HomeScreenState extends State<HomeScreen> {
 
     if (!mounted) return;
 
-    showModalBottomSheet(
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -357,38 +342,6 @@ class HomeScreenState extends State<HomeScreen> {
         expand: false,
         builder: (context, scrollController) => Column(
           children: [
-            // Container(
-            //   padding: const EdgeInsets.all(16),
-            //   decoration: BoxDecoration(
-            //     color: Theme.of(context).colorScheme.surface,
-            //     borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            //     boxShadow: [
-            //       BoxShadow(
-            //         color: Colors.black.withOpacity(0.1),
-            //         blurRadius: 10,
-            //         offset: const Offset(0, -2),
-            //       ),
-            //     ],
-            //   ),
-            //   child: Column(
-            //     mainAxisSize: MainAxisSize.min,
-            //     children: [
-            //       // Container(
-            //       //   width: 40,
-            //       //   height: 4,
-            //       //   decoration: BoxDecoration(
-            //       //     color: Colors.grey[300],
-            //       //     borderRadius: BorderRadius.circular(2),
-            //       //   ),
-            //       // ),
-            //       // const SizedBox(height: 16),
-            //       Text(
-            //         vitamin.name,
-            //         style: Theme.of(context).textTheme.titleLarge,
-            //       ),
-            //     ],
-            //   ),
-            // ),
             Padding(  
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               child: Text(
@@ -410,9 +363,68 @@ class HomeScreenState extends State<HomeScreen> {
                   if (missedDates.contains(date)) return [2];
                   return [];
                 },
+                onDaySelected: (selectedDay, focusedDay) async {
+                  final today = DateTime.now();
+                  final selectedDate = DateTime(selectedDay.year, selectedDay.month, selectedDay.day);
+                  if (selectedDate.isAfter(DateTime(today.year, today.month, today.day))) return;
+                  final dbService = Provider.of<DatabaseService>(context, listen: false);
+                  final intakes = await dbService.getVitaminIntakesByVitaminId(vitamin.id!);
+                  VitaminIntake? intakeForDay;
+                  try {
+                    intakeForDay = intakes.firstWhere(
+                      (i) =>
+                        i.scheduledTime.year == selectedDate.year &&
+                        i.scheduledTime.month == selectedDate.month &&
+                        i.scheduledTime.day == selectedDate.day,
+                    );
+                  } catch (_) {
+                    intakeForDay = null;
+                  }
+                  if (intakeForDay != null) {
+                    if (intakeForDay.isTaken) {
+                      // Удалить intake полностью с cloud sync
+                      if (intakeForDay.id != null) {
+                        await dbService.deleteVitaminIntakeWithCloudSync(intakeForDay.id!);
+                      }
+                    } else {
+                      // Отметить как принято (cloud sync)
+                      await dbService.updateVitaminIntakeWithCloudSync(
+                        intakeForDay.copyWith(isTaken: true, takenTime: selectedDate),
+                      );
+                    }
+                  } else {
+                    // Создать intake и отметить как принято (cloud sync)
+                    final newId = await dbService.insertVitaminIntake(
+                      VitaminIntake(
+                        vitaminId: vitamin.id!,
+                        scheduledTime: selectedDate,
+                        takenTime: selectedDate,
+                        isTaken: true,
+                      ),
+                    );
+                    await dbService.updateVitaminIntakeWithCloudSync(
+                      VitaminIntake(
+                        id: newId,
+                        vitaminId: vitamin.id!,
+                        scheduledTime: selectedDate,
+                        takenTime: selectedDate,
+                        isTaken: true,
+                      ),
+                    );
+                  }
+                  // Обновить UI
+                  final updatedIntakes = await dbService.getVitaminIntakesByVitaminId(vitamin.id!);
+                  takenDates
+                    ..clear()
+                    ..addAll(updatedIntakes.where((i) => i.isTaken).map((i) => DateTime(i.takenTime.year, i.takenTime.month, i.takenTime.day)));
+                  missedDates
+                    ..clear()
+                    ..addAll(updatedIntakes.where((i) => !i.isTaken && i.scheduledTime.isBefore(DateTime.now())).map((i) => DateTime(i.scheduledTime.year, i.scheduledTime.month, i.scheduledTime.day)));
+                  (context as Element).markNeedsBuild();
+                },
                 calendarStyle: CalendarStyle(
                   markersMaxCount: 1,
-                  markerDecoration: BoxDecoration(
+                  markerDecoration: const BoxDecoration(
                     color: Colors.green,
                     shape: BoxShape.circle,
                   ),
@@ -449,7 +461,7 @@ class HomeScreenState extends State<HomeScreen> {
                     );
                   },
                 ),
-                headerStyle: HeaderStyle(
+                headerStyle: const HeaderStyle(
                   formatButtonVisible: false,
                   titleCentered: true,
                 ),
@@ -496,25 +508,9 @@ class HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
-  }
-
-  Widget _buildStatItem(BuildContext context, String label, String value, IconData icon, Color color) {
-    return Column(
-      children: [
-        Icon(icon, color: color),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-        ),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-      ],
-    );
+    // После закрытия календаря обновляем витамины и UI
+    _loadVitamins();
+    setState(() {});
   }
 }
 

@@ -91,7 +91,7 @@ class _LoginScreenState extends State<LoginScreen>
 
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
-      await authService.signInWithGoogle();
+      await authService.signInWithGoogle(context: context);
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('isGuest', false);
       if (mounted) {
@@ -122,10 +122,11 @@ class _LoginScreenState extends State<LoginScreen>
       _error = null;
     });
     try {
-      final userCredential =
-          await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final userCredential = await authService.signInWithEmailAndPassword(
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
+        context: context,
       );
       final user = userCredential.user;
       if (user != null && !user.emailVerified) {

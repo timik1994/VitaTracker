@@ -58,6 +58,13 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     _checkGuest();
+    // Синхронизация из облака при запуске, если пользователь авторизован
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      if (authService.currentUser != null) {
+        await Provider.of<DatabaseService>(context, listen: false).syncFromCloud();
+      }
+    });
   }
 
   Future<void> _checkGuest() async {

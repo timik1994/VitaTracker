@@ -366,6 +366,8 @@ class DatabaseService extends ChangeNotifier {
 
   // Сохранить витамин в Firestore
   Future<void> saveVitaminToCloud(Vitamin vitamin) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
     final doc = _userVitaminsCollection.doc(vitamin.id?.toString() ?? UniqueKey().toString());
     await doc.set(vitamin.toMap());
   }
@@ -375,7 +377,7 @@ class DatabaseService extends ChangeNotifier {
     final snapshot = await _userVitaminsCollection.get();
     return snapshot.docs.map((doc) {
       final data = doc.data();
-      data['id'] = int.tryParse(doc.id) ?? null;
+      data['id'] = int.tryParse(doc.id);
       return Vitamin.fromMap(data);
     }).toList();
   }
@@ -387,8 +389,12 @@ class DatabaseService extends ChangeNotifier {
 
   // Сохранить приём витамина в Firestore
   Future<void> saveIntakeToCloud(VitaminIntake intake) async {
-    final doc = _userIntakesCollection.doc(intake.id?.toString() ?? UniqueKey().toString());
-    await doc.set(intake.toMap());
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    // id всегда обязателен для синхронизации
+    if (intake.id == null) throw Exception('Intake id is required for cloud sync');
+    final doc = _userIntakesCollection.doc(intake.id.toString());
+    await doc.set(intake.toMap(forCloud: true));
   }
 
   // Загрузить все приёмы витаминов из Firestore
@@ -396,9 +402,10 @@ class DatabaseService extends ChangeNotifier {
     final snapshot = await _userIntakesCollection.get();
     return snapshot.docs.map((doc) {
       final data = doc.data();
-      data['id'] = int.tryParse(doc.id) ?? null;
+      // id всегда берём из doc.id
+      data['id'] = int.tryParse(doc.id);
       return VitaminIntake.fromMap(data);
-    }).toList();
+    }).where((i) => i.id != null).toList();
   }
 
   // Удалить приём витамина из Firestore
@@ -406,8 +413,16 @@ class DatabaseService extends ChangeNotifier {
     await _userIntakesCollection.doc(id).delete();
   }
 
+  // Вставить intake с заданным id (для syncFromCloud)
+  Future<void> insertVitaminIntakeWithId(VitaminIntake intake) async {
+    final db = await database;
+    await db.insert('vitamin_intakes', intake.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
   // Синхронизация: загрузить из облака и сохранить локально
   Future<void> syncFromCloud() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
     final vitamins = await loadVitaminsFromCloud();
     final intakes = await loadIntakesFromCloud();
     final db = await database;
@@ -417,13 +432,15 @@ class DatabaseService extends ChangeNotifier {
       await db.insert('vitamins', v.toMap());
     }
     for (final i in intakes) {
-      await db.insert('vitamin_intakes', i.toMap());
+      await insertVitaminIntakeWithId(i);
     }
     notifyListeners();
   }
 
   // Синхронизация: сохранить локальные данные в облако
   Future<void> syncToCloud() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
     final vitamins = await getVitamins();
     final intakes = await getVitaminIntakes();
     for (final v in vitamins) {
@@ -431,6 +448,56 @@ class DatabaseService extends ChangeNotifier {
     }
     for (final i in intakes) {
       await saveIntakeToCloud(i);
+    }
+  }
+
+  Future<void> deleteVitaminWithCloudSync(int id) async {
+    // Проверяем авторизацию
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      // Только локальное удаление
+      await deleteVitamin(id);
+      return;
+    }
+    // Удалить из локальной базы сразу
+    await deleteVitamin(id);
+    // Удалить все приёмы этого витамина из облака параллельно (в фоне)
+    final intakes = await getVitaminIntakesByVitaminId(id);
+    Future.wait(intakes.map((intake) => deleteIntakeFromCloud(intake.id.toString())));
+    // Удалить витамин из облака (в фоне)
+    deleteVitaminFromCloud(id.toString());
+  }
+
+  Future<void> updateVitaminIntakeWithCloudSync(VitaminIntake intake) async {
+    final user = FirebaseAuth.instance.currentUser;
+    await updateVitaminIntake(intake);
+    if (user == null) return;
+    await saveIntakeToCloud(intake);
+  }
+
+  Future<int> insertVitaminWithCloudSync(Vitamin vitamin) async {
+    final id = await insertVitamin(vitamin);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      await saveVitaminToCloud(vitamin);
+    }
+    return id;
+  }
+
+  Future<int> deleteVitaminIntake(int id) async {
+    final db = await database;
+    return await db.delete(
+      'vitamin_intakes',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> deleteVitaminIntakeWithCloudSync(int id) async {
+    final user = FirebaseAuth.instance.currentUser;
+    await deleteVitaminIntake(id);
+    if (user != null) {
+      await deleteIntakeFromCloud(id.toString());
     }
   }
 } 
